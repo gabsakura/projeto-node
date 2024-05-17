@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import Chart from 'chart.js/auto';
+import './App.css';
 
 const SensorDataChart = () => {
   const [sensorData, setSensorData] = useState([]);
-  const [chartInstance, setChartInstance] = useState(null);
+  const [chartInstances, setChartInstances] = useState({});
+  const [darkMode, setDarkMode] = useState(false);
+  const [updateInterval, setUpdateInterval] = useState(null);
 
-  // Função para enviar os dados do sensor para o backend
   const sendSensorData = async () => {
     const dadosSensor = {
-      sensor_id: 1, // Id do sensor (se necessário)
-      temperatura: Math.random() * 50, // Gerando temperatura aleatória (exemplo)
-      umidade: Math.random() * 100 // Gerando umidade aleatória (exemplo)
+      sensor_id: 1,
+      temperatura: Math.random() * 50,
+      umidade: Math.random() * 100,
+      vibracao: Math.random() * 10,
+      tensao: Math.random() * 220
     };
 
     try {
@@ -52,10 +56,8 @@ const SensorDataChart = () => {
   useEffect(() => {
     const updateChartData = async () => {
       try {
-        // Enviar os dados do sensor para o backend
         await sendSensorData();
 
-        // Buscar os dados atualizados do backend
         const response = await fetch('http://localhost:3000/dados-sensores');
         if (!response.ok) {
           throw new Error('Erro ao buscar dados: ' + response.statusText);
@@ -63,57 +65,120 @@ const SensorDataChart = () => {
         const data = await response.json();
         setSensorData(data);
 
-        // Destrói o gráfico existente antes de criar um novo
-        if (chartInstance) {
-          chartInstance.destroy();
-        }
+        Object.values(chartInstances).forEach(chart => chart.destroy());
 
-        const ctx = document.getElementById('sensor-chart');
-        const newChartInstance = new Chart(ctx, {
+        const ctxTemperatura = document.getElementById('temperatura-chart');
+        const ctxUmidade = document.getElementById('umidade-chart');
+        const ctxVibracao = document.getElementById('vibracao-chart');
+        const ctxTensao = document.getElementById('tensao-chart');
+
+        const chartOptions = {
           type: 'line',
-          data: {
-            // labels: data.map(entry => new Date(entry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })),
-            labels: data.map(entry => {
-              const timestamp = new Date(entry.timestamp);
-              timestamp.setHours(timestamp.getHours() - 3); // Subtraindo 3 horas
-              return timestamp.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-          }),
-            datasets: [
-              {
-                label: 'Temperatura',
-                data: data.map(entry => entry.temperatura),
-                borderColor: 'rgb(227 15 89)',
-              },
-              {
-                label: 'Umidade',
-                data: data.map(entry => entry.umidade),
-                borderColor: 'rgb(54, 162, 235)',
-              }
-            ]
-          },
           options: {
             scales: {
               y: {
                 beginAtZero: true
               }
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: darkMode ? 'white' : 'black'
+                }
+              }
             }
           }
-        });
+        };
 
-        // Armazena a nova instância do gráfico no estado
-        setChartInstance(newChartInstance);
+        const newChartInstances = {
+          temperatura: new Chart(ctxTemperatura, {
+            ...chartOptions,
+            data: {
+              labels: data.map(entry => new Date(entry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })),
+              datasets: [{
+                label: 'Temperatura',
+                data: data.map(entry => entry.temperatura),
+                borderColor: 'rgb(227, 15, 89)',
+              }]
+            }
+          }),
+          umidade: new Chart(ctxUmidade, {
+            ...chartOptions,
+            data: {
+              labels: data.map(entry => new Date(entry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })),
+              datasets: [{
+                label: 'Umidade',
+                data: data.map(entry => entry.umidade),
+                borderColor: 'rgb(54, 162, 235)',
+              }]
+            }
+          }),
+          vibracao: new Chart(ctxVibracao, {
+            ...chartOptions,
+            data: {
+              labels: data.map(entry => new Date(entry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })),
+              datasets: [{
+                label: 'Vibração',
+                data: data.map(entry => entry.vibracao),
+                borderColor: 'rgb(75, 192, 192)',
+              }]
+            }
+          }),
+          tensao: new Chart(ctxTensao, {
+            ...chartOptions,
+            data: {
+              labels: data.map(entry => new Date(entry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })),
+              datasets: [{
+                label: 'Tensão',
+                data: data.map(entry => entry.tensao),
+                borderColor: 'rgb(255, 206, 86)',
+              }]
+            }
+          })
+        };
+
+        setChartInstances(newChartInstances);
       } catch (error) {
         console.error('Erro ao buscar ou atualizar dados:', error);
       }
     };
 
-    const interval = setInterval(updateChartData, 10000); // Intervalo de 10 segundos
+    const interval = setInterval(updateChartData, 10000);
+    setUpdateInterval(interval);
 
-    // Limpar intervalo ao desmontar o componente
     return () => clearInterval(interval);
-  }, [chartInstance]);
+  }, [chartInstances, darkMode]);
 
-  return <canvas id="sensor-chart" width="600" height="200"></canvas>;
+  const stopUpdates = () => {
+    if (updateInterval) {
+      clearInterval(updateInterval);
+    }
+  };
+
+  return (
+    <div className={`app-container ${darkMode ? 'dark-mode' : 'light-mode'}`}>
+      <div className="button-container">
+        <button onClick={() => setDarkMode(!darkMode)}>
+          {darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        </button>
+        <button onClick={stopUpdates}>Stop Updates</button>
+      </div>
+      <div className="charts-container">
+        <div className="chart-wrapper">
+          <canvas id="temperatura-chart"></canvas>
+        </div>
+        <div className="chart-wrapper">
+          <canvas id="umidade-chart"></canvas>
+        </div>
+        <div className="chart-wrapper">
+          <canvas id="vibracao-chart"></canvas>
+        </div>
+        <div className="chart-wrapper">
+          <canvas id="tensao-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default SensorDataChart;
